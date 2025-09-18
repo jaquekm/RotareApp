@@ -1,0 +1,53 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: rotare-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rotare}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rotarepass}
+      POSTGRES_DB: ${POSTGRES_DB:-rotare_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - rotare_pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rotare} -d ${POSTGRES_DB:-rotare_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  redis:
+    image: redis:7-alpine
+    container_name: rotare-redis
+    ports:
+      - "6379:6379"
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: rotare-mqtt
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+  api:
+    build: ./backend
+    container_name: rotare-api
+    depends_on:
+      - postgres
+      - redis
+      - mosquitto
+    env_file:
+      - .env
+    ports:
+      - "${API_PORT:-3000}:3000"
+  worker:
+    build: ./worker
+    container_name: rotare-worker
+    depends_on:
+      - postgres
+      - mosquitto
+    env_file:
+      - .env
+volumes:
+  rotare_pgdata:
